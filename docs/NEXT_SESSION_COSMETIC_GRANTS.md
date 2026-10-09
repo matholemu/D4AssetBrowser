@@ -65,9 +65,17 @@ Measured across all **12,117** `.itm` records: **2,466 true / 9,651 false**. Tho
 **7,034** distinct Actors. Of those 7,034: **2,466 have exactly one `true` item, 4,568 have zero,
 and none has two.** No exceptions in the whole dataset.
 
-So `bIsTransmog` means *this Item is the canonical wardrobe entry for the appearance reached through
-its `snoActor`*. The 4,568 actors with none are non-wardrobe appearances — drop proxies, `*_flippy`
-ground models.
+**CORRECTED 2026-10-09 — the interpretation that stood here was wrong.** It read `bIsTransmog` as
+*the canonical wardrobe entry for the appearance* and the 4,568 actors with none as drop proxies.
+Measured since:
+
+- The one-per-actor invariant holds in all three builds checked (2.6.0: 2,101 true / 0 actors with
+  two; 3.0.1: 2,298 / 0; 3.2.1: 2,466 / 0). That part stands.
+- Of the 4,546 Items a StoreProduct grants through `snoItemTransmog`, **3,062 are false**. Shop
+  cosmetics that players wear carry a false flag, so it is not "in the wardrobe".
+- Of the 4,568 actors with no true item, 3,061 are store-granted and only 465 are `*_flippy`.
+- Hunch, unverified: it gates unlocking a look from the *item itself* (found / salvaged), which
+  shop entitlements do not need. Does not explain the 1,484 store-granted Items that are true.
 
 The true item's own filename matches its actor's name **1,591** times and differs **875** times.
 It holds for shop cosmetics and breaks on base gear: `1HAxe_Magic_Generic_002` carries the flag for
@@ -103,6 +111,11 @@ Across all **463** `*trophy*.itm`: 375 granted by StoreProduct, 34 by Achievemen
 trophy. Their art, Actor, Appearance and name strings are all still shipped and all parse clean.
 **A cosmetic is retired by cutting the grant, never by deleting assets.**
 
+**CORRECTED 2026-10-09:** the last sentence of the next paragraph is too broad. 437 leaf products
+have every slot null; only 23 share a name with an Item, and ~400 are licences, tracking dummies,
+Platinum cards and passes. `mnt_amor103_horse_stor` (Demonbinder) has had an all-null product since
+2023-10 including while it was usable. All-null means "grants nothing through a typed slot" only.
+
 Two de-listing patterns: product file deleted (`mnt_uniq28_trophy`, *Blood Maiden’s Mantle*, S4), or
 product kept with `snoItemTransmog: null` (`mnt_uniq29_trophy`, *The Felled Council*). **A
 StoreProduct with every `sno*` slot null is a retired product, not a failed decode.**
@@ -133,8 +146,12 @@ player, and section 2.2 measured it as a fixed one-per-appearance invariant. Eit
 live memory or save state rather than the file, or they are comparing two different `.itm` files
 that share an appearance.
 
-Do not build on 2.2 as settled until this is answered. If the file genuinely changes, 2.2 is wrong
-and so is everything derived from it. The reply sent to them already asks this.
+**ANSWERED 2026-10-09.** They meant *between patches*, and they are right. Demonbinder
+(`mnt_amor103_horse_stor`) is true in every d4data snapshot from 2023-06 through 2.6.0.70982, false
+at 3.0.1.71566, true at 3.2.1.73552 — the builds they named. Whole-folder diff: 2.6.0 → 3.0.1
+switched 49 true → false and 23 false → true; 3.0.1 → 3.2.1 switched 11 off and 2 on. For 48 of the
+49, no sibling took the flag. So the flag is static within a build and is patch data across builds.
+See the correction in 2.2 for what it does and does not mean.
 
 ---
 
@@ -153,8 +170,11 @@ and so is everything derived from it. The reply sent to them already asks this.
    to answer it from data and has never been run — it dumps `ptHardpoints` from the `.app.json`
    files. The candidates are `HP_shield` (1410210544) and `HP_leftWeapon` (4036545548). Run the
    probe before theorising.
-5. **An *Unobtainable* filter for the Catalogue**, derived from 2.5. Models already has an
-   *Orphaned* chip; this is the same idea applied to grants, and it needs no external data.
+5. **An *Unobtainable* filter for the Catalogue** — **blocked, no sound rule yet.** Both candidate
+   rules fail measurement: "all-null product" flags licences and Platinum (see 2.5), and "no
+   `bIsTransmog` item" flags 3,061 purchasable appearances (see 2.2). The nearest thing is "no true
+   item AND no grantor on any item" — 617 actors, holding 31 of the 39 known switched-off ones — but
+   it also holds crafted base gear. Do not build it without a decision on the definition.
 6. **Fix the 2.4.1 GitHub release.** Empty body and a divergent title — CI published it instead of
    `github.bat`. Regenerate with `python release-notes.py 2.4.1 RELEASE_BODY.md`, paste it, rename
    the title to `D4AssetBrowser_v2.4.1`, confirm the attached assets.
