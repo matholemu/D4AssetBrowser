@@ -29,6 +29,20 @@ if defined PYEXE (
         echo  ^>^> verify-src found problems ^(listed above^). Building anyway - Ctrl+C to stop.
         echo.
     )
+
+    :: Score SnoIndex.cpp's SNO group table against the game's own (d4data snoGroups.json).
+    :: That table was wrong in 85 of 132 entries for most of this project's life and nothing
+    :: caught it, because the only group names anything asks for happened to be among the
+    :: correct ones. A wrong label does not degrade to a caller's fallback, it OVERRIDES it,
+    :: so this is a silent-wrong-answer guard, not a style check. Skips itself cleanly when
+    :: no d4data snapshot is present. Non-blocking, like verify-src above.
+    %PYEXE% "%~dp0tools\verify-sno-groups.py" --quiet
+    if errorlevel 1 (
+        echo.
+        echo  ^>^> verify-sno-groups found a mislabelled SNO group ^(listed above^).
+        echo     Fix src\index\SnoIndex.cpp before trusting any groupIdByName result.
+        echo.
+    )
 )
 
 :: Fast incremental rebuild: recompiles only changed source files and relinks.

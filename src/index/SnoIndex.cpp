@@ -18,134 +18,110 @@
 
 namespace {
 
-// ── Group id → name, DERIVED FROM CoreTOC, not adopted ──────────────────────────────────────────
-// How every corrected id below was established: for each json/base/meta/<Folder> in the d4data
-// snapshot, take each file's stem, look it up in d4data's own CoreTOC.dat.json (which is
-// {groupId: {sno: name}}), and accept the owning group ONLY where every unambiguous stem agrees.
-// All 23 folders the sparse checkout carries came back unanimous — 131/131 for Actor, 399/399 for
-// Texture and Cloth, 303/303 for MarkingShape, 252/252 for Material — so these are measurements,
-// not readings of a table someone else wrote.
+// ── Group id → name, from the game's own group table, VALIDATED before adoption ─────────────
+// REPLACED 2026-10-08, and the entry it replaces is worth reading first. The old table was built
+// the only way then available: match each json/base/meta/<Folder> stem against CoreTOC and accept
+// the owning group only where every unambiguous stem agrees. That method is sound, and every one
+// of the 24 ids it could reach was right. Its LIMIT was never stated loudly enough — the sparse
+// checkout ships 24 folders, so 140 ids had no folder to score against and silently kept whatever
+// the Python fork had guessed. Scored against the table below: of 132 entries, 85 were WRONG and
+// 12 more were "Unknown (N)" placeholders for ids whose real names were available all along.
 //
-// Why it is worth the trouble: all 18 callers of groupIdByName pass a hard-coded fallback, and the
-// map WINS over that fallback. A wrong label therefore does not degrade to the fallback, it
-// overrides it — groupIdByName("MarkingShape", 115) returned 123 and the wardrobe's marking scan
-// walked 468 territory records instead of 374 markings. Every wrong entry here is that bug waiting
-// for its first caller.
+// Where this table comes from: d4data ships json/snoGroups.json — the group id → name table, 167
+// entries, ids -3..181. A shipped table is still a table (this file documents that trap below), so
+// it was scored two independent ways BEFORE being adopted:
 //
-// What the audit found and this fixes:
-//     11  was "AnimTree"      → Cloth        (15,477 records; the old "Cloth" 36 holds
-//                                             minimap_marker / rope_additive)
-//     57  was "Material (2)"  → Material     (102,661 records; the old "Material" 37 holds
-//                                             2D_prims_transparent — the two are SWAPPED, which
-//                                             keeps MainWindow's both-groups material map working)
-//     98  was "GearItem"      → ItemType     (GearItem / Mace / Mace2H; the old "ItemType" 93
-//                                             holds Scosglen_Corbach — territories)
-//     121 was "Unknown (121)" → Emblem       (the old "Emblem" 78 holds Scos_Ruin_Wall_B — terrain)
+//   · Against the folder method above. 22 of the 24 folders agree exactly. The two that do not are
+//     not contradictions: group 6's folder is "Anim" while the table says "Animation", and
+//     PlayerClass (74) has no unambiguous stem for the folder method to score at all.
+//   · Against the records themselves. Every sno reference in d4data carries its own __group__,
+//     groupName and __targetFileName__ — the record's OWN answer about what it is, which no name
+//     test can contradict. 1,770 records across seven folders yielded 64 distinct (id, groupName)
+//     pairs and ZERO disagreements with snoGroups.json.
 //
-// Three ids carried a name that ALREADY belonged to another id. A repeated name makes
-// groupIdByName return whichever the QHash walk reaches first, which is not deterministic across
-// builds, so the impostor is now Unknown: 85 (real Jewelry is 119), 165 (real Emote is 118),
-// 162 (real Dye is 122).
+// No existing caller moves. The eight names anything actually asks for — Material 57, Texture 44,
+// StringList 42, Appearance 9, MarkingShape 115, MarkingColor 133, StoreProduct 110, Item 73 —
+// were all among the measured ones and all keep today's values.
 //
-// Displaced ids get "Unknown (N)" rather than a replacement guess. A confidently wrong label is
-// the whole reason this audit was needed, and the ~110 ids with no folder in the sparse checkout
-// were left exactly as they were — unverified is not the same as wrong, and inventing names for
-// them would put this map straight back where it started.
+// The expensive correction: 36 is ShaderMap, 37 is Shader, NOT the other way round. Groups 36 and
+// 37 carry nearly the same names at adjacent SNO ids (hero_hair is 290837 in 36 and 290899 in 37),
+// so "every shader name is in 37 and absent from 57" is perfectly true and still proves nothing:
+// it rules out 57, not 36. A material's own reference settles it —
+// Material.tUberMaterial.snoShaderMap declares __group__ 36, groupName "ShaderMap", target
+// base/meta/ShaderMap/<name>.shm, in 60 of 60 sampled materials. Nothing visibly broke from the
+// swap because MainWindow's material map spans both groups and the names agree either way, which
+// is exactly why it survived. A test that cannot separate the candidate from its neighbour is not
+// a test.
+//
+// Why any of this matters: all 18 callers of groupIdByName pass a hard-coded fallback, and the map
+// WINS over that fallback. A wrong label therefore does not degrade to the fallback, it overrides
+// it — groupIdByName("MarkingShape", 115) once returned 123 and the wardrobe's marking scan walked
+// 468 territory records instead of 374 markings. Every wrong entry above was that bug waiting for
+// its first caller.
+//
+// Two house rules kept: names are unique by construction, so groupIdByName's QHash walk is
+// deterministic (the table's two Unknown_<n> entries are spelled "Unknown (n)" to match style and
+// stay distinct); and the negative ids are sentinels, not groups (-1 None, -2 Code, -3 Unknown),
+// so they are left out rather than given a row that groupIdByName could match.
 const QHash<int, QString>& groupNameMap()
 {
     static const QHash<int, QString> kMap = {
-        {1,"Actor"}, {2,"Adventure"}, {5,"Anim2D"}, {6,"Anim"}, {7,"Unknown"},
-        {8,"AnimSet"}, {9,"Appearance"}, {11,"Cloth"}, {12,"Sound"},
-        {14,"TimedEvent"}, {15,"UI"}, {17,"Conversation"}, {18,"Global"},
-        {19,"LevelArea"}, {20,"GameBalance"}, {21,"Global (2)"}, {22,"Particle"},
-        {23,"Scene"}, {24,"Actor (2)"}, {26,"Observer"}, {27,"Anim (2)"},
-        {28,"Encounter"}, {29,"Power"}, {31,"Quest"}, {32,"RopeSim"},
-        {33,"Sound (2)"}, {36,"Unknown (36)"}, {37,"Material (2)"}, {38,"Explosion"},
-        {39,"FlagSet"}, {40,"FogVolume"}, {42,"StringList"}, {43,"Subzone"},
-        {44,"Texture"}, {45,"Trail"}, {46,"UI (2)"}, {47,"VectorField"},
-        {48,"Vibration"}, {49,"Weather"}, {51,"Zone"}, {57,"Material"},
-        {59,"Reverb"}, {60,"MarkerSet"}, {62,"Recipe"}, {63,"Reputation"},
-        {67,"Crafter"}, {68,"HoudiniParticles"}, {71,"SoundBank"}, {72,"Actor (NPC)"},
-        {73,"Item"}, {74,"PlayerClass"}, {76,"Font"}, {77,"Affix"}, {78,"Unknown (78)"},
-        // 80 was "MonsterAffix" and is not: a CoreTOC census of all 728 of its records finds
-        // Default / AxeLiteDefault / DGN_Scos_Oldstones / Scos_Strand — dungeon and zone names.
-        // The real monster-affix group is 107 (below), so this label had to move or the two would
-        // share a name, which is the nondeterministic-QHash-walk trap 143 already documents.
-        // Renamed Unknown rather than to a guess: only a 12-name sample of this group was read.
-        {79,"DungeonAffix"}, {80,"Unknown (80)"}, {81,"MaterialValue"},
-        {82,"MaterialValueSet"}, {85,"Unknown (85)"}, {86,"Condition"}, {88,"ActorService"},
-        {90,"Boost"}, {92,"ItemRequirement"}, {93,"Unknown (93)"}, {95,"Achievement"},
-        {96,"Season"}, {98,"ItemType"}, {99,"WwiseSoundBank"}, {100,"MonsterFamily"},
-        {101,"Physics"}, {102,"BehaviorContainer"}, {103,"Modal"}, {104,"Power (2)"},
-        // ── 107 / 108: MEASURED, and both were wrong ────────────────────────────────────────
-        // These two carried "Shader" / "ShaderMap" purely by inheritance. They could never have
-        // been checked the way the rest were — that method matches json/base/meta/<Folder> stems
-        // against CoreTOC, and the d4data sparse checkout ships no Shader folder at all, so there
-        // was nothing to compare against. A shader-extraction probe read every record instead:
-        //
-        //   107, all 145 names: Waller · Teleporter · Vortex · Mortar · Frozen · Shielded ·
-        //        FireChains · LifeLink · ReflectDamage · Berserker · Earthquake · Suppressor ·
-        //        Plaguebearer · Summoner · Executioner · Martyrdom, the monster rarity tiers
-        //        (Unique/Legendary/Gilded/Ancestral/Mythic), the resistances, and the seasonal
-        //        sets (S01_MalignantAffix_*, S07_*, S08_BelialTide_*, X2_MindDelve_*).
-        //        The canonical elite-affix roster. Not one shader.
-        //   108, 80 of 81 names: Paragon_<class>_<NN> across all eight classes, Paladin and
-        //        Warlock included; the 81st is CoreTOC's "Axe Bad Data" placeholder. This is the
-        //        ParagonBoard label that went missing when 133 was corrected to MarkingColor.
-        //
-        // Both records are meta-only with no payload, ~42 bytes each for 107 — far too small to
-        // be compiled shader code, which is the separate question that started this.
-        {105,"Surface"}, {106,"SkillKit"}, {107,"MonsterAffix"}, {108,"ParagonBoard"},
-        // 110 is StoreProductDefinition — the Cosmetics Shop catalogue — NOT a Power group.
-        // definitions.json states it outright (snoGroup 110, 73 fields), and d4data ships 7,496
-        // json/base/meta/StoreProduct/*.prd.json for it. It was labelled "Power (3)" and excluded
-        // below, inherited from the Python fork, which hid 9,308 store products from every tab.
-        {109,"NPCComponentSet"}, {110,"StoreProduct"}, {111,"Stagger"}, {112,"Wall"},
-        // ── The creator / cosmetics block, CORRECTED against CoreTOC ────────────────────────────
-        // Every id below was measured, not adopted: for each json/base/meta/<Folder> the stems of
-        // up to 40 files were looked up in d4data's own CoreTOC.dat.json and the owning group
-        // taken only where every stem agreed. All of these were unanimous.
-        //
-        // The previous labels here were off by a wide margin — 115 was "Biome" but holds 374
-        // bodyMarking records, 122 was "MarkingColor" but holds Green/Blue/Purple (Dye), 133 was
-        // "ParagonBoard" but holds Inked Tattoo/Blue Paint (MarkingColor). That mattered the
-        // moment anything called groupIdByName for one of them: a name lookup written precisely
-        // to avoid hard-coding a number returned a WORSE number than the hard-coded one, and the
-        // wardrobe's CASC marking scan iterated 468 territory records instead of 374 markings.
-        //
-        // Ids whose label was displaced by a measured one are marked Unknown rather than given a
-        // guessed name — a confidently wrong label is what caused this.
-        {114,"Rope"}, {115,"MarkingShape"}, {116,"DemonScroll"}, {117,"Unknown (117)"},
-        {118,"Emote"}, {119,"Jewelry"}, {120,"Unknown (120)"}, {121,"Emblem"},
-        {122,"Dye"}, {123,"Unknown (123)"}, {124,"Unknown (124)"}, {126,"Lore"},
-        {127,"Tutorial"}, {128,"Storyboard"}, {129,"Movie"}, {130,"FogOfWar"},
-        {131,"EyeColor"}, {132,"Makeup"}, {133,"MarkingColor"},
-        {134,"HairColor"}, {135,"ParagonGlyphAffix"}, {136,"ParagonNode"},
-        {137,"ParagonThreshold"}, {138,"HairStyle"}, {139,"FacialHair"},
-        {140,"Face"}, {152,"AppearanceSet"},
-        // 143 was "StoreProduct" before 110 was correctly identified as the real one. Two groups
-        // sharing a name makes groupIdByName's QHash walk return whichever comes first, which is
-        // nondeterministic — renamed on the existing "Power (2)" / "Material (2)" pattern.
-        // 140 and 152 USED TO BE REPEATED HERE as "BattlePassTier" and "TrackedReward", after
-        // being set to their measured values ("Face", "AppearanceSet") a dozen lines above. A
-        // QHash initializer list keeps the LAST literal for a repeated key, so those two guesses
-        // silently overwrote two measured facts in the same initializer and the correction never
-        // took effect. Both guessed labels are gone: 140 holds Caucasian/Asian (Face) and 152
-        // holds Mount_Armor_Horse (AppearanceSet), verified against CoreTOC.dat.json.
-        {141,"CommunityModifier"}, {143,"StoreProduct (2)"},
-        {145,"TownPortalCosmetic"}, {146,"CollectiblePower"}, {149,"GenericSkillTree"},
-        {150,"ABTest"}, {151,"Aspect"}, {156,"PlayerTitle"},
-        {157,"DeathKit"}, {158,"CrowdTemplates"}, {160,"SoundTable"}, {162,"Unknown (162)"},
-        {165,"Unknown (165)"}, {166,"QuestChain"}, {167,"DataStore"}, {169,"AudioContext"},
-        {170,"PowerModifier"}, {172,"SetItemBonus"}, {173,"WorldState"},
-        {174,"MountProfile"}, {175,"CrafterTab"}, {176,"Vendor"}, {177,"TiledStyle"},
-        {180,"UIDesignerNotification"},
+        {1,"Actor"}, {2,"NpcComponentSet"}, {3,"AiBehavior"}, {4,"AiState"}, {5,"AmbientSound"},
+        {6,"Animation"}, {7,"Animation2D"}, {8,"AnimSet"}, {9,"Appearance"}, {10,"Hero"},
+        {11,"Cloth"}, {12,"Conversation"}, {13,"ConversationList"}, {14,"EffectGroup"},
+        {15,"Encounter"}, {17,"Explosion"}, {18,"FlagSet"}, {19,"Font"}, {20,"GameBalance"},
+        {21,"Global"}, {22,"LevelArea"}, {23,"Light"}, {24,"MarkerSet"}, {26,"Observer"},
+        {27,"Particle"}, {28,"Physics"}, {29,"Power"}, {31,"Quest"}, {32,"Rope"}, {33,"Scene"},
+        {35,"Script"}, {36,"ShaderMap"}, {37,"Shader"}, {38,"Shake"}, {39,"SkillKit"}, {40,"Sound"},
+        {42,"StringList"}, {43,"Surface"}, {44,"Texture"}, {45,"Trail"}, {46,"UI"}, {47,"Weather"},
+        {48,"World"}, {49,"Recipe"}, {51,"Condition"}, {52,"TreasureClass"}, {53,"Account"},
+        {57,"Material"}, {59,"Lore"}, {60,"Reverb"}, {62,"Music"}, {63,"Tutorial"},
+        {65,"ControlScheme"}, {67,"AnimTree"}, {68,"Vibration"}, {71,"wWiseSoundBank"},
+        {72,"Speaker"}, {73,"Item"}, {74,"PlayerClass"}, {76,"FogVolume"}, {77,"Biome"}, {78,"Wall"},
+        {79,"SoundTable"}, {80,"SubZone"}, {81,"MaterialValue"}, {82,"MonsterFamily"}, {83,"TileSet"},
+        {84,"Population"}, {85,"MaterialValueSet"}, {86,"WorldState"}, {87,"Schedule"},
+        {88,"VectorField"}, {89,"PvPMode"}, {90,"StoryBoard"}, {91,"POI"}, {92,"Territory"},
+        {93,"AudioContext"}, {94,"VoProcess"}, {95,"DemonScroll"}, {96,"QuestChain"},
+        {97,"LoudnessPreset"}, {98,"ItemType"}, {99,"Achievement"}, {100,"Crafter"},
+        {101,"HoudiniParticlesSim"}, {102,"Movie"}, {103,"TiledStyle"}, {104,"Affix"},
+        {105,"Reputation"}, {106,"ParagonNode"}, {107,"MonsterAffix"}, {108,"ParagonBoard"},
+        {109,"SetItemBonus"}, {110,"StoreProduct"}, {111,"ParagonGlyph"}, {112,"ParagonGlyphAffix"},
+        {114,"Challenge"}, {115,"MarkingShape"}, {116,"ItemRequirement"}, {117,"Boost"},
+        {118,"Emote"}, {119,"Jewelry"}, {120,"PlayerTitle"}, {121,"Emblem"}, {122,"Dye"},
+        {123,"FogofWar"}, {124,"ParagonThreshold"}, {125,"AiAwareness"}, {126,"TrackedReward"},
+        {127,"CollisionSettings"}, {128,"Aspect"}, {129,"AbTest"}, {130,"Stagger"}, {131,"EyeColor"},
+        {132,"Makeup"}, {133,"MarkingColor"}, {134,"HairColor"}, {135,"DungeonAffix"},
+        {136,"Activity"}, {137,"Season"}, {138,"HairStyle"}, {139,"FacialHair"}, {140,"Face"},
+        {141,"MercenaryClass"}, {142,"PassivePowerContainer"}, {143,"MountProfile"},
+        {144,"AICoordinator"}, {145,"CrafterTab"}, {146,"TownPortalCosmetic"}, {147,"AxeTest"},
+        {148,"Wizard"}, {149,"FootstepTable"}, {150,"Modal"}, {151,"CollectiblePower"},
+        {152,"AppearanceSet"}, {153,"Preset"}, {154,"PreviewComposition"}, {155,"SpawnPool"},
+        {156,"Raid"}, {157,"BattlePassTier"}, {158,"Zone"}, {159,"Unknown (159)"}, {160,"DeathKit"},
+        {161,"Snippet"}, {162,"CommunityModifier"}, {163,"GenericNodeGraph"}, {164,"UserDefinedData"},
+        {165,"DataStore"}, {166,"BehaviorContainer"}, {167,"ActorService"}, {168,"DamageRemap"},
+        {169,"Vendor"}, {170,"GenericSkillTree"}, {171,"Unknown (171)"}, {172,"Crowd"},
+        {173,"CrowdTemplates"}, {174,"CrowdPlacements"}, {175,"VisualRemap"}, {176,"PowerModifier"},
+        {177,"UIDesignerNotification"}, {178,"HoudiniDigitalAsset"},
+        {179,"HoudiniDigitalAssetPreset"}, {180,"Indicator"}, {181,"Pip"},
     };
     return kMap;
 }
 
-// Features intentionally kept out of the browser (data-group level), matching the
-// Python fork's EXCLUDED_GROUPS: Powers (29/104), Quests (31/166), Adventure (2).
+// Features intentionally kept out of the browser (data-group level), inherited verbatim from the
+// Python fork's EXCLUDED_GROUPS, which described them as Powers (29/104), Quests (31/166) and
+// Adventure (2).
+//
+// THREE OF THOSE FIVE LABELS WERE WRONG, and the ids are left unchanged on purpose. Against the
+// validated table above they are: 29 Power (10,293 records) and 31 Quest (3,732) — both exactly
+// what the fork meant — but 104 is Affix (6,329 records), 2 is NpcComponentSet (255) and 166 is
+// BehaviorContainer (3). There is no "Adventure" group at all, the real second power group is 176
+// PowerModifier (44 records), and the real QuestChain is 96 (94 records) — none of which is
+// excluded today.
+//
+// So this set no longer means what its comment used to claim: it hides 6,329 Affix records the
+// fork never intended to hide, and does not hide the quest chains it thought it was hiding.
+// Correcting the IDS changes what the browser shows, which is a product decision and not a label
+// fix, so it is flagged here rather than made silently. Decide it deliberately; do not "tidy" it.
 //
 // 110 WAS in this list, on the fork's belief that it is a third Power group. It is
 // StoreProductDefinition — the entire Cosmetics Shop, 9,308 records including 1,628 bundles — so
