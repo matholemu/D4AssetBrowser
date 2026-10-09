@@ -11,11 +11,11 @@ code comments at each site.
 
 | What | Path |
 |---|---|
-| Project root | `C:\Users\notso\Downloads\Claude Current\Diablo4AssetBrowser Native` |
-| Source | `C:\Users\notso\Downloads\Claude Current\Diablo4AssetBrowser Native\src` |
-| Build output | `C:\Users\notso\Downloads\Claude Current\Diablo4AssetBrowser Native\build\release` |
-| Audit reports | `C:\Users\notso\Downloads\Claude Current\Diablo4AssetBrowser Native\build\release\data` |
-| Backups | `C:\Users\notso\Downloads\Claude Current\Diablo4AssetBrowser Native\.Backups` |
+| Project root | `G:\G Claude Projects\AssetBrowser\Diablo4AssetBrowser Native` |
+| Source | `G:\G Claude Projects\AssetBrowser\Diablo4AssetBrowser Native\src` |
+| Build output | `G:\G Claude Projects\AssetBrowser\Diablo4AssetBrowser Native\build\release` |
+| Audit reports | `G:\G Claude Projects\AssetBrowser\Diablo4AssetBrowser Native\build\release\data` |
+| Backups | `G:\G Claude Projects\AssetBrowser\Diablo4AssetBrowser Native\.Backups` |
 | d4data snapshot | `C:\Users\notso\AppData\Roaming\Diablo4AssetBrowser\Diablo4AssetBrowserNative\d4data` |
 | Game install | `G:\G Games\Diablo IV` |
 

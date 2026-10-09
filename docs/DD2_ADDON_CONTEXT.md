@@ -18,7 +18,7 @@ says so. **Read this, then treat the source tree and the actual DD2 tools as the
 
 | | |
 |---|---|
-| **Exists** | `D4AssetBrowser` (C++17/Qt6) — extracts D4 assets, writes `.glb`. Root: `C:\Users\notso\Downloads\Claude Current\Diablo4AssetBrowser Native` |
+| **Exists** | `D4AssetBrowser` (C++17/Qt6) — extracts D4 assets, writes `.glb`. Root: `G:\G Claude Projects\AssetBrowser\Diablo4AssetBrowser Native` |
 | **Exists** | A "Modding / retarget" settings group already doing Blender/Unreal/Unity conventions at export time (`src/app/SettingsDialog.cpp`, **Experimental** tab, ~line 1446) |
 | **DOES NOT EXIST** | Any Blender addon. Globbed the whole tree and the shared folders: only `verify-src.py`, `docs/parse_probe.py`, `.Resources/tact_scan.py` and vcpkg vendor scripts. This is a **new** addon, not an update. |
 

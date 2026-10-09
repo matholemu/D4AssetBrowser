@@ -43,7 +43,7 @@ say so in your report rather than forcing it.
 
 | What | Path |
 |---|---|
-| Project root | `C:\Users\notso\Downloads\Claude Current\Diablo4AssetBrowser Native` |
+| Project root | `G:\G Claude Projects\AssetBrowser\Diablo4AssetBrowser Native` |
 | The document | `docs\ASSETBROWSER_TEMPLATE.md` — 567 lines, ~38 KB, **CRLF** |
 | Docs index | `docs\README.md` — has a row describing the template, **CRLF** |
 | Sibling design docs | `docs\CONTEXT_MENUS.md`, `docs\MODEL_EXPORT.md`, `docs\HYGIENE_TOOLING.md` |

@@ -77,7 +77,7 @@ implies. (`tabs-store.md` §7.2, `plugin-build.md` §1.2)
 
 ## 2. Target layout
 
-One repository, one folder in `Claude Current`:
+One repository, one folder in `G:\G Claude Projects\AssetBrowser`:
 
 ```
 AssetBrowser\
