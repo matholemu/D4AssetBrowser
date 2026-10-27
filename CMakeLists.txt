@@ -241,9 +241,14 @@ elseif(WIN32)
     #
     # run.bat has been deploying correctly this whole time by copying the same files by hand, so
     # this does what run.bat does. Same source, same plugin set, no external tool.
-    set(_qt_bin "${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/bin")
-    set(_qt_plugins "${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/Qt6/plugins")
+    set(_qt_bin "$ENV{QT_ROOT_DIR}/bin")
+    set(_qt_plugins "$ENV{QT_ROOT_DIR}/plugins")
     install(DIRECTORY "${_qt_bin}/" DESTINATION . FILES_MATCHING PATTERN "*.dll")
+    set(_vcpkg_bin "${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/bin")
+    if(EXISTS "${_vcpkg_bin}")
+        install(DIRECTORY "${_vcpkg_bin}/" DESTINATION .
+                FILES_MATCHING PATTERN "*.dll")
+    endif()
     # Only the plugin families a Widgets/OpenGL app actually loads. platforms is mandatory —
     # without qwindows.dll the exe dies at startup with "no Qt platform plugin could be initialized".
     foreach(_p platforms imageformats styles iconengines)
