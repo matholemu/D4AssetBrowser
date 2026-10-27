@@ -7994,6 +7994,11 @@ void WardrobeTab2::rebuildOutfitImpl(bool async)
             }
         loadLog += QStringLiteral("\nface want=%1%2 -> sno=%3").arg(prefix).arg(suffix).arg(baseSno);
         addPiece(baseSno, baseName, true);
+        // TEMPORARY DIAGNOSTIC: skin source discovered from the selected face.
+        // When empty, armor_skin_mat cannot be substituted for a real skin material.
+        qInfo().noquote() << "SKIN-PROBE face" << baseName
+                          << "prefix=" << prefix << "bodySkinMat="
+                          << (bodySkinMat.isEmpty() ? QStringLiteral("<EMPTY>") : bodySkinMat);
 
         // Body slots: equipped armor; else the first nude/underwear token that PARSES.
         // Armor carries its own skin_mat, so it replaces the nude piece (never both).
@@ -8613,6 +8618,12 @@ void WardrobeTab2::rebuildOutfitImpl(bool async)
         QString effMat = m;
         if (isSkinPlaceholder && !bodySkinMat.isEmpty()) effMat = bodySkinMat;
         else if (isFacialHairPrim && !fhUse.isEmpty())   effMat = fhUse;
+        if (isSkinPlaceholder)
+            qInfo().noquote() << "SKIN-PROBE placeholder" << "prefix=" << prefix
+                              << "primitive=" << primIdx << "original=" << m
+                              << "skinSource=" << (bodySkinMat.isEmpty() ? QStringLiteral("<EMPTY>") : bodySkinMat)
+                              << "effective=" << effMat
+                              << "tone=" << (skinCol.isValid() ? skinCol.name() : QStringLiteral("<INVALID>"));
         // Reused by the eye test and the FX classification below.
         const QString effShader = shaderOf(effMat);
 
@@ -8663,7 +8674,27 @@ void WardrobeTab2::rebuildOutfitImpl(bool async)
                 base = hairColorFromMask(base, hairMask, hairRamp, hairInfl, &hairAo);
             } else if (hairTint.isValid()) base = tintImage(base, hairTint);   // fallback: flat tint
         }
-        if (isSkin && !isHair && skinCol.isValid()) base = skinRecolor(base, skinCol);   // skin tone
+        if (isSkinPlaceholder)
+            qInfo().noquote() << "SKIN-PROBE decoded" << "effective=" << effMat
+                              << "imageNull=" << base.isNull() << "size=" << base.size()
+                              << "isSkin=" << isSkin << "isHair=" << isHair;
+        // Spiritborn (and any future class) can have an armor_skin_mat placeholder
+        // without a discovered *_BOD material in the face's appearance roster.
+        // That placeholder's base map is black, and skinRecolor preserves luminance;
+        // recoloring black therefore cannot produce the selected tone.  Fall back
+        // to a neutral skin-coloured albedo instead of a permanently white/black
+        // untextured body. This does not replace the normal/roughness maps.
+        // Keep the fallback restricted to *unresolved placeholders* to avoid
+        // changing working Sorcerer/other class skin and equipped materials.
+        if (isSkinPlaceholder && bodySkinMat.isEmpty() && skinCol.isValid()) {
+            base = QImage(4, 4, QImage::Format_RGBA8888);
+            base.fill(skinCol);
+            qInfo().noquote() << "SKIN-FALLBACK" << "prefix=" << prefix
+                              << "primitive=" << primIdx << "tone=" << skinCol.name()
+                              << "reason=unresolved-body-skin-material";
+        } else if (isSkin && !isHair && skinCol.isValid()) {
+            base = skinRecolor(base, skinCol);   // skin tone
+        }
         if (isEye) {   // real shared eye base (iris recoloured to the EyeColor); fallback = flat tint
             if (!eyeBaseImg.isNull()) base = eyeBaseImg;
             else if (irisCol.isValid()) {
