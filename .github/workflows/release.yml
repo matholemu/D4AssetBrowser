@@ -41,7 +41,7 @@ jobs:
       # The tool's small non-Qt dependencies, from vcpkg (classic mode — fast, prebuilt binaries).
       - name: Install deps (vcpkg)
         shell: cmd
-        run: '"%VCPKG_INSTALLATION_ROOT%\vcpkg" install zlib lz4 fastgltf tinygltf --triplet x64-windows'
+        run: '"%VCPKG_INSTALLATION_ROOT%\vcpkg" install zlib lz4 --triplet x64-windows --classic'
 
       - name: Configure
         shell: cmd
@@ -50,7 +50,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
           -DVCPKG_MANIFEST_MODE=OFF
           -DVCPKG_TARGET_TRIPLET=x64-windows
-          -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
           -DCMAKE_PREFIX_PATH=%QT_ROOT_DIR%
 
       - name: Build
