@@ -454,8 +454,19 @@ QByteArray CascReader::readArchive(const IndexEntry& e) const
     if (!f.open(QIODevice::ReadOnly)) return {};
     if (!f.seek(qint64(e.offset))) return {};
     const QByteArray comp = f.read(e.size);
-    if (comp.size() <= ARCHIVE_FRAME_HEADER) return {};
-    const QByteArray blte = comp.mid(ARCHIVE_FRAME_HEADER);
+    // CASC index entries may point either to a BLTE stream directly or to a
+    // 30-byte archive envelope followed by BLTE. Preserve both layouts.
+    // In particular, never strip 30 bytes from a stream already starting BLTE.
+    if (comp.isEmpty()) return {};
+    const bool directBlte = comp.startsWith("BLTE");
+    if (!directBlte && comp.size() <= ARCHIVE_FRAME_HEADER) return {};
+    const QByteArray blte = directBlte ? comp : comp.mid(ARCHIVE_FRAME_HEADER);
+    if (qEnvironmentVariableIsSet("D4_ENVELOPE_PROBE") &&
+        (e.size == 1467225 || e.size == 1385009))
+        qInfo("CASC-FIX-PROBE archive=%u offset=%llu directBLTE=%d selectedBytes=%lld signature=%s",
+              unsigned(e.archive), static_cast<unsigned long long>(e.offset),
+              int(directBlte), static_cast<long long>(blte.size()),
+              blte.startsWith("BLTE") ? "BLTE" : "OTHER");
     const bool frameProbe = qEnvironmentVariableIsSet("D4_FRAME_PROBE") &&
         (e.size == 1467225 || e.size == 1385009);
     if (frameProbe) {
