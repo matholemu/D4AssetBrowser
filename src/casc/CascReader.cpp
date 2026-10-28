@@ -455,7 +455,42 @@ QByteArray CascReader::readArchive(const IndexEntry& e) const
     if (!f.seek(qint64(e.offset))) return {};
     const QByteArray comp = f.read(e.size);
     if (comp.size() <= ARCHIVE_FRAME_HEADER) return {};
-    return blteDecode(comp.mid(ARCHIVE_FRAME_HEADER));
+    const QByteArray blte = comp.mid(ARCHIVE_FRAME_HEADER);
+    const bool frameProbe = qEnvironmentVariableIsSet("D4_FRAME_PROBE") &&
+        (e.size == 1467225 || e.size == 1385009);
+    if (frameProbe) {
+        const char* label = e.size == 1467225 ? "Spiritborn 1271267" : "Sorcerer 667373";
+        qInfo("FRAME-PROBE %s stored=%u archiveHeader=%d blteBytes=%lld magic=%s",
+              label, unsigned(e.size), ARCHIVE_FRAME_HEADER,
+              static_cast<long long>(blte.size()), blte.startsWith("BLTE") ? "BLTE" : "OTHER");
+        if (blte.startsWith("BLTE") && blte.size() >= 12) {
+            const quint32 headerSize = rdBE32(blte, 4);
+            if (headerSize > 0) {
+                const int count = rdN_BE(blte, 9, 3);
+                qint64 expected = 0, compressed = 0;
+                int pos = 12;
+                for (int i = 0; i < count && pos + 24 <= blte.size(); ++i) {
+                    const quint32 c = rdBE32(blte, pos);
+                    const quint32 u = rdBE32(blte, pos + 4);
+                    compressed += c;
+                    expected += u;
+                    pos += 24;
+                    qInfo("FRAME-PROBE %s chunk=%d compressed=%u uncompressed=%u",
+                          label, i, unsigned(c), unsigned(u));
+                }
+                qInfo("FRAME-PROBE %s count=%d expectedTotal=%lld compressedTotal=%lld headerSize=%u available=%lld",
+                      label, count, static_cast<long long>(expected),
+                      static_cast<long long>(compressed), unsigned(headerSize),
+                      static_cast<long long>(blte.size()));
+            } else {
+                qInfo("FRAME-PROBE %s single frame (headerSize=0)", label);
+            }
+        }
+    }
+    const QByteArray decoded = blteDecode(blte);
+    if (frameProbe)
+        qInfo("FRAME-PROBE result decodedBytes=%lld", static_cast<long long>(decoded.size()));
+    return decoded;
 }
 
 // How the Salsa20 nonce is built from the frame's IV and its block index. Both constructions are in
@@ -639,6 +674,13 @@ QByteArray CascReader::blteDecode(const QByteArray& data) const
         dataPos += comp;
         if (frame.isEmpty()) continue;
         const QByteArray dec = decompressFrame(quint8(frame[0]), frame.mid(1), bi, uncomp);
+        if (qEnvironmentVariableIsSet("D4_FRAME_PROBE") &&
+            (data.size() == 1467225 - ARCHIVE_FRAME_HEADER ||
+             data.size() == 1385009 - ARCHIVE_FRAME_HEADER)) {
+            qInfo("FRAME-PROBE decodedChunk=%d type=%c expected=%d actual=%lld status=%s",
+                  bi, frame[0], uncomp, static_cast<long long>(dec.size()),
+                  dec.size() == uncomp ? "OK" : "FAILED");
+        }
         if (dec.size() != uncomp) {
             if (++badFrames == 1) {
                 firstBad = bi;
