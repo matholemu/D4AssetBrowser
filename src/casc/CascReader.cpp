@@ -1237,8 +1237,25 @@ QByteArray CascReader::readFile(const QString& name)
         }
     }
     if (perf) { s_rsLookup.fetch_add(rt.nsecsElapsed()); rt.restart(); }
+    // Narrow, read-only diagnostic: does a texture live in multiple TVFS spans?
+    // Enable with D4_SPAN_PROBE=1. This preserves the existing loading behavior.
+    const bool spanProbe = qEnvironmentVariableIsSet("D4_SPAN_PROBE") &&
+        (name == QStringLiteral("base/payload/1271267") ||
+         name == QStringLiteral("base/payload/667373"));
+    if (spanProbe) {
+        qInfo("SPAN-PROBE path=%s resolvedEntries=%d", qPrintable(name), int(entries.size()));
+        for (int i = 0; i < entries.size(); ++i) {
+            const IndexEntry& ent = entries[i];
+            qInfo("SPAN-PROBE entry=%d storedBytes=%u", i, unsigned(ent.size));
+        }
+    }
+    int spanIndex = 0;
     for (const IndexEntry& e : entries) {
         const QByteArray raw = readArchive(e);
+        if (spanProbe)
+            qInfo("SPAN-PROBE loadedEntry=%d decodedBytes=%lld", spanIndex,
+                  static_cast<long long>(raw.size()));
+        ++spanIndex;
         if (!raw.isEmpty()) {
             if (perf) { s_rsArchive.fetch_add(rt.nsecsElapsed()); s_rsBytes.fetch_add(raw.size()); }
             return raw;
