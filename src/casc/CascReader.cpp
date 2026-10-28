@@ -1267,6 +1267,7 @@ QByteArray CascReader::readFile(const QString& name)
     // local buffers (the TACT-key lookup takes its own tiny m_keysMutex), so concurrent bulk
     // workers genuinely read+decompress in parallel instead of taking turns on m_mutex.
     QVector<IndexEntry> entries;
+    QVector<QByteArray> probeKeys;  // Associated TVFS EKey prefixes; diagnostic only.
     {
         QMutexLocker lock(&m_mutex);
         if (!m_ready) return {};
@@ -1275,7 +1276,10 @@ QByteArray CascReader::readFile(const QString& name)
         entries.reserve(eks.size());
         for (const QByteArray& ek : eks) {
             auto it = m_index.constFind(ek);
-            if (it != m_index.constEnd()) entries.append(it.value());
+            if (it != m_index.constEnd()) {
+                entries.append(it.value());
+                probeKeys.append(ek);
+            }
         }
     }
     if (perf) { s_rsLookup.fetch_add(rt.nsecsElapsed()); rt.restart(); }
@@ -1291,8 +1295,44 @@ QByteArray CascReader::readFile(const QString& name)
             qInfo("SPAN-PROBE entry=%d storedBytes=%u", i, unsigned(ent.size));
         }
     }
+    // Focused, read-only archive-envelope probe. No changes to archive selection or decoding.
+    // These are the known failing / working reference body-color textures.
+    const bool envelopeProbe = qEnvironmentVariableIsSet("D4_ENVELOPE_PROBE") &&
+        (name == QStringLiteral("base/payload/1271267") ||
+         name == QStringLiteral("base/payload/667373"));
+    if (envelopeProbe)
+        qInfo("ENVELOPE-PROBE path=%s resolvedEntries=%d", qPrintable(name), int(entries.size()));
     int spanIndex = 0;
     for (const IndexEntry& e : entries) {
+        if (envelopeProbe) {
+            const QByteArray expectedKey = probeKeys.value(spanIndex);
+            const QString archivePath = findArchive(e.archive, e.group);
+            QFile archiveFile(archivePath);
+            QByteArray header;
+            if (!archivePath.isEmpty() && archiveFile.open(QIODevice::ReadOnly) &&
+                archiveFile.seek(qint64(e.offset)))
+                header = archiveFile.read(qMin(quint32(128), e.size));
+            QByteArray reversedKey;
+            if (header.size() >= 16) {
+                reversedKey = header.left(16);
+                std::reverse(reversedKey.begin(), reversedKey.end());
+            }
+            const bool keyMatches = !expectedKey.isEmpty() &&
+                reversedKey.size() >= expectedKey.size() &&
+                reversedKey.startsWith(expectedKey);
+            const QByteArray at30 = header.size() >= 34 ? header.mid(30, 4) : QByteArray();
+            const int blteAt = header.indexOf("BLTE");
+            qInfo("ENVELOPE-PROBE entry=%d group=%s archive=%u offset=%llu idxSize=%u path=%s opened=%d headBytes=%d",
+                  spanIndex, qPrintable(e.group), unsigned(e.archive),
+                  static_cast<unsigned long long>(e.offset), unsigned(e.size),
+                  qPrintable(archivePath), int(archiveFile.isOpen()), int(header.size()));
+            qInfo("ENVELOPE-PROBE expectedEKeyPrefix=%s envelopeKeyReversed=%s prefixMatches=%d sizeLE=%u sizeBE=%u at30=%s firstBLTEOffset=%d head64=%s",
+                  expectedKey.toHex().constData(), reversedKey.toHex().constData(),
+                  int(keyMatches), header.size() >= 20 ? unsigned(rdLE32(header, 16)) : 0u,
+                  header.size() >= 20 ? unsigned(rdBE32(header, 16)) : 0u,
+                  at30.toHex().constData(), blteAt,
+                  header.left(64).toHex(' ').constData());
+        }
         const QByteArray raw = readArchive(e);
         if (spanProbe)
             qInfo("SPAN-PROBE loadedEntry=%d decodedBytes=%lld", spanIndex,
